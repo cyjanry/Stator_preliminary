@@ -12,7 +12,7 @@ import scipy      as sci
 from   scipy.optimize    import minimize
 import matplotlib.pyplot as plt 
 import CoolProp.CoolProp as CP
-
+import datetime
 
 
 
@@ -101,7 +101,7 @@ def CalInitial(M,V,D):
     D.rho03 = D.rho04
 
     # Assuming there is no loss in momentum:
-    D.C3T = D.C4T * D.r4 / D.r3
+    D.C3T = D.C4T * ( 1/D.r3devr4min) # use the minimum r3/r4 ratio to initilize the calculation
 
     V.M3 = D.M4
     V.p3 = D.p4
@@ -211,6 +211,9 @@ def Calculation(x,M,V,D):
 
     # Calculate the geometry properties based on the fluid properties
     V.A3devb3 = 2.* np.pi * D.r3 - Z3 * 0.5* tt * ( 1. - 1./np.cos( np.radians(V.alpha3b) ) )
+    if V.A3devb3 < 0:
+        print( 2.* np.pi * D.r3, - 1./np.cos( np.radians(V.alpha3b)) )
+        1/0
 
     AB = 2. * D.r3 * np.sin( np.pi / Z3)
     BC = np.cos( np.radians(V.alpha3b) - np.pi/Z3) *AB
@@ -281,7 +284,8 @@ def Calculation2(x,M,V,D):
     # get geometry constraints, Z and tt
     tt = V.tt
     Z3 = V.Z3
-    
+    r3 = V.r3
+
     if M.verbosity > 0:
         print("\n")
         print("---------------------------")
@@ -289,6 +293,8 @@ def Calculation2(x,M,V,D):
         print("X",x)
         print("alpha3b = {0:.3f} [deg]; M3 = {1:.3f} [-]; p3 = {2:.1f} [kPa]; T3 = {3:.4} [K]".format(x[0],x[1],x[2]/1.e3,V.T3))
         print("tt = {0:.5f} [m]; Z3 = {1} [-]".format(tt,Z3))
+
+
 
     #  calculate other state properties at point 3
     if M.gasModel == 'Ideal':
@@ -304,18 +310,27 @@ def Calculation2(x,M,V,D):
 
     # Calculate the geometry properties based on the fluid properties and actual 
     # flow angle at point 3
-    V.A3devb3 = 2.* np.pi * D.r3 - Z3 * 0.5* tt * ( 1. + 1./np.cos( np.radians(V.alpha3b) ) )
-    # V.A3devb3 = 2.* np.pi * D.r3 - Z3 * tt * 1./np.cos( np.radians(V.alpha3b) )
-    #print(2.* np.pi * D.r3, Z3 * tt * 1./np.cos( np.radians(V.alpha3b) ) )
+    #if V.alpha3b > 90:
+    #    print('WARNING: alpha3b is larger than 90 degree! The value is: {}'.format(V.alpha3b))
+    V.A3devb3 = 2.* np.pi * r3 - Z3 * 0.5* tt * ( 1. + 1./np.cos( np.radians(V.alpha3b) ) )
+
+    #V.A3devb3 = 2.* np.pi * D.r3 - Z3 * 0.5* tt * ( 1. - 1./np.cos( np.radians(V.alpha3b) ) )
+    #if V.A3devb3 < 0:
+    #    print('WARNING! Negative A3devb3 value.')
+    #    print( 2.* np.pi * r3,    Z3* 0.5 *tt , ( 1. + 1./np.cos( np.radians(V.alpha3b) )), V.alpha3b )
+
+
+    # V.A3devb3 = 2.* np.pi * r3 - Z3 * tt * 1./np.cos( np.radians(V.alpha3b) )
+    #print(2.* np.pi * r3, Z3 * tt * 1./np.cos( np.radians(V.alpha3b) ) )
     #print(V.A3devb3)
 
-    AB = 2. * D.r3 * np.sin( np.pi / Z3)
+    AB = 2. * r3 * np.sin( np.pi / Z3)
     BC = np.cos( np.radians(V.alpha3b) - np.pi/Z3) *AB
-    AC = np.sin( np.radians(V.alpha3b - 0.5*np.pi)) * 2 *D.r3 * np.sin(np.pi / Z3)
+    AC = np.sin( np.radians(V.alpha3b - 0.5*np.pi)) * 2 *r3 * np.sin(np.pi / Z3)
     DC = 0.5 * tt + AC * np.tan( np.radians(D.delta) )
     BE = 0.5 * tt
     V.ds = BC - BE - DC    
-    V.s3 = 2* np.pi * D.r3/ Z3    
+    V.s3 = 2* np.pi * r3/ Z3    
     V.alpha3 = np.degrees(np.arccos(V.ds/V.s3))  # flow angle is respect to the radial    
     
     # calculate radial and tangential velocities at stator exit
@@ -331,7 +346,7 @@ def Calculation2(x,M,V,D):
 
     # do forward calculation from state 3 to predict conditions at 4:    
     # Momentum: mdot * V3T * r3 = mdot * V4T * r4
-    C4T = V.C3T * D.r3/D.r4  
+    C4T = V.C3T * r3/D.r4  
     # this can be replaced by momentum equation incorporating losses, but this 
     # also needs modifications to gap_function, which assumes isentropic process.
     C4T_actual = C4T
@@ -341,7 +356,7 @@ def Calculation2(x,M,V,D):
     
     # need to solve iteratively for other conditions. 
     initial = D.C4R
-    maxiter = 100
+    maxiter = M.maxiter 
     
     fun = lambda C4R:  gap_function(C4R,C4T,M,V,D)-mdot_actual
     
@@ -381,7 +396,7 @@ def Calculation2(x,M,V,D):
         print("C4T_target: {0}; C4T_actual: {1}; delta = {2}".format(C4T_target,C4T_actual,errors[0]))
         print("C4R_target: {0}; C4R_actual: {1}; delta = {2}".format(C4R_target,C4R_actual,errors[1]))
         print("T4_target: {0}; T4_actual: {1}; delta = {2}".format(T4_target,T4_actual,errors[2]))
-        print("P4_target: {0}; P4_actual: {1}; delta = n/a".format(p4_target/1.e3,p4_actual/1.e3))
+        #print("P4_target: {0}; P4_actual: {1}; delta = n/a".format(p4_target/1.e3,p4_actual/1.e3))
 
     return errors
 
@@ -411,10 +426,10 @@ def CalcStatorProps(M,V,D):
 
     # Make the gloable properties locally
     temp = []
-    temp.append(V.tt)      # Add the trailing edge thickness
+    temp.append(V.r3)      # Add the radius
     temp.append(V.Z3)      # Add the stator blade number
-    temp.append(V.a3)      # Add the local acoustic speed
-    temp.append(D.r3)      # Add the stator outlet radius 
+    temp.append(V.tt)      # Add the trailing edge thickness
+    temp.append(V.M3)      # Add the stator outlet radius 
     temp.append(V.A3devb3) # Add the unified pitch angle length
     temp.append(V.C3)      # Add the absolute velocity
     temp.append(V.alpha3)  # Add the outlet flow angle
@@ -424,12 +439,25 @@ def CalcStatorProps(M,V,D):
 
     return temp
 
-def writeOutput(V):
+def writeOutput(V,D):
 
-    f = open('output','a+')
+    f = open('output','w')
+    f.write('# '+str(datetime.datetime.now())+'\n')
+    f.write('# The following are the data list for the stator design.\n')
+    f.write('# The design parameters are:\n')
+    f.write('# r3devr4min = ' + str(D.r3devr4min) + '\n')
+    f.write('# r3devr4max = ' + str(D.r3devr4max) + '\n')
+    f.write('# r3devr4step = ' + str(D.r3devr4step) + '\n')    
+    f.write('# Z3min = ' + str(D.Z3min) + '\n')
+    f.write('# Z3max = ' + str(D.Z3max) + '\n')
+    f.write('# Z3step = ' + str(D.Z3step) + '\n')
+    f.write('# ttmin = ' + str(D.ttmin) + '\n')
+    f.write('# ttmax = ' + str(D.ttmax) + '\n')
+    f.write('# ttstep = ' + str(D.ttstep) + '\n')
+    f.write('#  [r3]   [Z3]  [tt]     [M3]         [A3devb3]       [C3]        [alpha3]       [alpha3b]         [C3R]         [C3T] \n')
+    
     for i in range(len(V.Properties)):
         for j in range(len(V.Properties[i])):
-
             f.write(str(V.Properties[i][j]) + ' ')
         f.write('\n')
    
@@ -453,6 +481,8 @@ class Model:
         #if self.maxiter == 0:
         if not (self.gasModel == 'Ideal' or self.gasModel == 'Real'):
             raise MyError('You do not correctly set the gas model type.')
+        if not (self.optimiser == 'Root' or self.optimiser == 'Nelder-Mead'):
+            raise MyError('You do not correctly set the optimiser solver type.')
         # add additional checks to assess that basics have been set-up correct;
 ###
 ###
@@ -497,6 +527,7 @@ def main(uoDict):
     # create string to collect warning messages
     warn_str = "\n"
 
+
     # main file to be executed
     jobFileName = uoDict.get("--job", "test")
 
@@ -529,11 +560,14 @@ def main(uoDict):
     # Use the rotor target value as initial value
     CalInitial(M,V,D)
 
+
+    #------------------------------------------------------------------------------------------------------------------#
     # test case to analyse operation of solver
     if False:
         # set trailing edge thickness and blade number
         V.tt = 1e-3
         V.Z3 = 15
+        V.r3 = 0.0040 
         
         # Do single evaluation
         A0 = (D.alpha4,D.M4,D.p4) # use conditions at 4 as estimates to get conditions at 3.
@@ -573,102 +607,115 @@ def main(uoDict):
         print("Mach No: M3={0:1.2e} [-]; M4={1:1.2e} [-]".format(M3,D.M4))
         print("\n")
         #a=a+5
-    
-    #Initialize the trailing edge thickness range and stator blade number range
+    #------------------------------------------------------------------------------------------------------------------#
+
+
+    #Initialize the trailing edge thickness range, stator blade number range and the radius ratio range
     ttlist = np.arange(D.ttmin, D.ttmax+D.ttstep, D.ttstep)
-    Zlist  = np.arange(D.Z3min, D.Z3max+1)
+    Zlist  = np.arange(D.Z3min, D.Z3max+D.Z3step, D.Z3step)
+    r3devr4list = np.arange(D.r3devr4min, D.r3devr4max + D.r3devr4step, D.r3devr4step)
+    #TODO: why add 1 step here.
+
 
     if M.verbosity >= 1:
         print("ttlist = {}".format(ttlist))
         print("Zlist = {}".format(Zlist))
+        print("r3devr4list={}".format(r3devr4list))
 
     
-    for i in range(len(ttlist)):
+    for i in range(len(r3devr4list)):
         for j in range(len(Zlist)):
+            for k in range(len(ttlist)):
             
-            # initialise the temp list to hold the properties
-            tempProps = []
+                # initialise the temp list to hold the properties
+                tempProps = []
 
-            V.tt = ttlist[i]
-            V.Z3 = Zlist[j]
-
-            if 1:
+                V.r3 = r3devr4list[i] * D.r4
+                V.Z3 = Zlist[j]
+                V.tt = ttlist[k]
                 
-                print("\n \n")
-                print("+++++++++++++++++++++")
-                print("+++++++++++++++++++++")
-                print("Solving for tt = {0:.3f} [mm]; Z3 = {1} [-]".format(V.tt/1.e-3,V.Z3))
-                
-                A0 = (D.alpha4,D.M4,D.p4) # use conditions at 4 as estimates to get conditions at 3.
-                args = (M, V, D)
 
-                max_fev = 100
+                if 'Root' == M.optimiser:
+                    
 
-                sol = sci.optimize.root(Calculation2,A0,args=args,method='lm',options={'eps':1.e-3, 'xtol':1.e-12, 'maxiter':max_fev})
-                status = sol.status
-                X = sol.x
-                fun = sol.fun
-                mesg = sol.message
+                    print("\n \n")
+                    print("+++++++++++++++++++++")
+                    print("+++++++++++++++++++++")
+                    print("Solving for tt = {0:.3f} [mm]; Z3 = {1} [-]; r3 = {2} [mm]".format(V.tt/1.e-3,V.Z3, V.r3/1.e-3))
+                    
+                    A0 = (D.alpha4,D.M4,D.p4) # use conditions at 4 as estimates to get conditions at 3.
+                    args = (M, V, D)
 
-                P3 = X[2]    
-                if M.gasModel == 'Ideal':  
-                    T3 = D.Tref * np.exp((D.S0 + D.R * np.log(P3/D.Pref)) / D.Cp) 
-                else:
-                    T3 = CP.PropsSI('T', 'P', V.p3, 'S',D.S0, D.fluidType) 
-        
-                print("\n")
-                print("++++++++++++++++++++++++++++")
-                print("Solver Status:",mesg)
-                print("ERRORS: C4T={0:1.2e} [m/s]; C4R={1:1.2e} [m/s]; T4={2:1.2e} [K]; P4=n/a [kPa]".format(fun[0],fun[1],fun[2]))
-                print("SOLUTION:",X)          #S = [V.alpha3b, V.M3, V.p3]
-                print("alpha3b = {0:.3f} [deg]; M3 = {1:.3f} [-]; p3 = {2:.1f} [kPa]; T3 = {3:.4} [K]".format(X[0],X[1],X[2]/1.e3,T3))
-                print("tt = {0:.5f} [m]; Z3 = {1} [-]".format(V.tt,V.Z3))
-                print("++++++++++++++++++++++++++++")   
+                    max_fev = M.maxiter
 
-                V.Properties.append(CalcStatorProps(M,V,D))
+                    sol = sci.optimize.root(Calculation2,A0,args=args,method='lm',options={'eps':1.e-3, 'xtol':1.e-12, 'maxiter':max_fev})
+                    status = sol.status
+                    X = sol.x
+                    fun = sol.fun
+                    mesg = sol.message
+
+                    P3 = X[2]    
+                    if M.gasModel == 'Ideal':  
+                        T3 = D.Tref * np.exp((D.S0 + D.R * np.log(P3/D.Pref)) / D.Cp) 
+                    else:
+                        T3 = CP.PropsSI('T', 'P', V.p3, 'S',D.S0, D.fluidType) 
+            
+                    print("\n")
+                    print("++++++++++++++++++++++++++++")
+                    print("Solver Status:",mesg)
+                    print("ERRORS: C4T={0:1.2e} [m/s]; C4R={1:1.2e} [m/s]; T4={2:1.2e} [K]; P4=n/a [kPa]".format(fun[0],fun[1],fun[2]))
+                    print("SOLUTION:",X)          #S = [V.alpha3b, V.M3, V.p3]
+                    print("alpha3b = {0:.3f} [deg]; M3 = {1:.3f} [-]; p3 = {2:.1f} [kPa]; T3 = {3:.4} [K]".format(X[0],X[1],X[2]/1.e3,T3))
+                    print("tt = {0:.5f} [m]; Z3 = {1} [-]".format(V.tt,V.Z3))
+                    print("++++++++++++++++++++++++++++")   
+
+                    if V.A3devb3 < 0:
+                        print('WARNING!!!!!!',V.A3devb3, X[0],), 1/0
+
+                    V.Properties.append(CalcStatorProps(M,V,D))
 
 
-            if 0:
+                if 0:
 
-                # Here we use Nelder-Mead method to grab the gas and geometric properties.
+                    # Here we use Nelder-Mead method to grab the gas and geometric properties.
 
-                # Two variables are optimised.
-                x0 = [V.alpha3b, V.M3]
+                    # Two variables are optimised.
+                    x0 = [V.alpha3b, V.M3]
 
-                V.initial_simplex = initSimplex(x0)
-             
-                           
+                    V.initial_simplex = initSimplex(x0)
+                 
+                               
 
-                ############################################################
-                # THE OPTIMISER!
-                # Here we use the minimize module from scipy.py
-                # The method is Nelder-Mead.
-                # For a given case, the initial simplex need to be adjust 
-                # from the input.py file, which located in the example folder
-                res =  minimize(Calculation,x0,args=(M,V,D),method='Nelder-Mead',options={'initial_simplex': V.initial_simplex, 'maxiter':M.maxiter})
-                #
-                #
-                ############################################################
+                    ############################################################
+                    # THE OPTIMISER!
+                    # Here we use the minimize module from scipy.py
+                    # The method is Nelder-Mead.
+                    # For a given case, the initial simplex need to be adjust 
+                    # from the input.py file, which located in the example folder
+                    res =  minimize(Calculation,x0,args=(M,V,D),method='Nelder-Mead',options={'initial_simplex': V.initial_simplex, 'maxiter':M.maxiter})
+                    #
+                    #
+                    ############################################################
 
-                # TODO: need a function to calculate the rest geometry and fluid properties for stator
-                
-                print(res)
-                
-                
-                #tempProps.append(CalcStatorProps(M,V,D))
-                V.Properties.append(CalcStatorProps(M,V,D))
+                    # TODO: need a function to calculate the rest geometry and fluid properties for stator
+                    
+                    print(res)
+                    
+                    
+                    #tempProps.append(CalcStatorProps(M,V,D))
+                    V.Properties.append(CalcStatorProps(M,V,D))
 
-                #CalcStatorProps(M,V,D)
+                    #CalcStatorProps(M,V,D)
 
-                
-                print('OPTIMISATION COMPLETE')
-                print('    Final Residual: {}'.format(res))
-                print('    alpha3b is:{}'.format(res.x[0]))
-                print('    M3 is:{}'.format(res.x[1]))
+                    
+                    print('OPTIMISATION COMPLETE')
+                    print('    Final Residual: {}'.format(res))
+                    print('    alpha3b is:{}'.format(res.x[0]))
+                    print('    M3 is:{}'.format(res.x[1]))
             
             
-
-    writeOutput(V)
+    # write the output
+    writeOutput(V,D)
     
     return 0
 ###
