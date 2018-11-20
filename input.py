@@ -6,17 +6,21 @@
 
 
 # Define the trailing edge thickness 
-D.ttmin = 1.0e-4  # m 
-D.ttmax = 4.0e-4  # m
-D.ttstep = 0.1e-4 # m
+D.ttmin = 1.0e-3  # m 
+D.ttmax = 3.0e-3  # m
+D.ttstep = 0.1e-3 # m
 
-D.r3devr4min = 1.01
-D.r3devr4max = 1.05
+
+# Define the radius ratio range
+D.r3devr4min  = 1.05
+D.r3devr4max  = 1.35
+D.r3devr4step = 0.02
 
 
 # stator properties
-D.Z3min = 20
-D.Z3max = 40
+D.Z3min = 14
+D.Z3max = 30
+D.Z3step = 1
 #D.b3    = 0.004251
 
 
@@ -27,17 +31,19 @@ D.fluidType = 'CO2'
 
 #
 
-D.r3       = 0.0485928   # m  0.0425187[1.05]   0.0485928[1.2]
-D.delta    = 5.
+
+
+
+D.delta    = 2.
 # rotor properties/target properties
-D.r4       = 0.040494   # m
-D.T4       = 787.290547 # K
-D.p4       = 14365321.162128 # pa
+D.r4       = 0.042016   # m
+D.T4       = 795.091676 # K
+D.p4       = 15214696.02081 # pa
 D.gamma    = 1.239186  
-D.C4       = 322.402051   # m s-1
-D.A4       = 0.001026   # m2
-D.b4       = 0.004251   # m
-D.alpha4   = 81.528855  # degree
+D.C4       = 293.992329   # m s-1
+D.A4       = 0.000602   # m2
+D.b4       = 0.002398   # m
+D.alpha4   = 73.300756  # degree
 
 
 D.b3       =  D.b4
@@ -56,7 +62,7 @@ D.b3       =  D.b4
 #D.b4       = 0.000969   # m
 #D.alpha4   = 71.146841  # degree
 
-
-M.maxiter  = 100
-M.gasModel = 'Ideal'#'Real'# 'Ideal'  # Ideal or Real
+M.optimiser = 'Root' # or 'Nelder-Mead'
+M.maxiter  = 500
+M.gasModel = 'Real'#'Ideal'#'Real'# 'Ideal'  # Ideal or Real
 
