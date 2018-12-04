@@ -224,6 +224,7 @@ def Calculation(x,M,V,D):
     V.s3 = 2* np.pi * D.r3/ Z3    
     V.alpha3 = np.degrees(np.arccos(V.ds/V.s3))  # flow angle is respect to the radial
 
+
     
 
 
@@ -314,15 +315,11 @@ def Calculation2(x,M,V,D):
     #    print('WARNING: alpha3b is larger than 90 degree! The value is: {}'.format(V.alpha3b))
     V.A3devb3 = 2.* np.pi * r3 - Z3 * 0.5* tt * ( 1. + 1./np.cos( np.radians(V.alpha3b) ) )
 
-    #V.A3devb3 = 2.* np.pi * D.r3 - Z3 * 0.5* tt * ( 1. - 1./np.cos( np.radians(V.alpha3b) ) )
+    #print(1./np.cos( np.radians(V.alpha3b))), 1/0
+
     #if V.A3devb3 < 0:
     #    print('WARNING! Negative A3devb3 value.')
     #    print( 2.* np.pi * r3,    Z3* 0.5 *tt , ( 1. + 1./np.cos( np.radians(V.alpha3b) )), V.alpha3b )
-
-
-    # V.A3devb3 = 2.* np.pi * r3 - Z3 * tt * 1./np.cos( np.radians(V.alpha3b) )
-    #print(2.* np.pi * r3, Z3 * tt * 1./np.cos( np.radians(V.alpha3b) ) )
-    #print(V.A3devb3)
 
     AB = 2. * r3 * np.sin( np.pi / Z3)
     BC = np.cos( np.radians(V.alpha3b) - np.pi/Z3) *AB
@@ -331,27 +328,43 @@ def Calculation2(x,M,V,D):
     BE = 0.5 * tt
     V.ds = BC - BE - DC    
     V.s3 = 2* np.pi * r3/ Z3    
-    V.alpha3 = np.degrees(np.arccos(V.ds/V.s3))  # flow angle is respect to the radial    
+    V.alpha3 = np.degrees(np.arccos(V.ds/(V.s3+tt)))  # flow angle is respect to the radial  
+    #V.alpha3 = np.degrees( np.radians(V.alpha3b) -   np.pi / Z3  )  
+    
+    
+
+    #print('----', V.ds, V.s3, np.degrees(np.arccos(V.ds/(V.s3-V.tt))))
+    #1/0
     
     # calculate radial and tangential velocities at stator exit
     V.C3R = V.C3 * np.cos( np.radians (V.alpha3))
     V.C3T = V.C3 * np.sin( np.radians (V.alpha3))
     # print("C3R, C3T, alpha3",C3R,C3T,V.alpha3)
 
+
+    #!!! All the calculated rotor properties are constrained into local value.
+
     # calculate conserved quantities at rotor inlet:
     C4R_target = D.C4R 
     C4T_target = D.C4T 
-    T4_target = D.T4
+    T4_target  = D.T4
     #p4_target = D.p4
 
     # do forward calculation from state 3 to predict conditions at 4:    
     # Momentum: mdot * V3T * r3 = mdot * V4T * r4
-    C4T = V.C3T * r3/D.r4  
+    #C4T = V.C3T * r3/D.r4  
+    #Here is considering the momentume loss faction. 
+    C4T = V.C3T * r3/ D.r4
+
+
     # this can be replaced by momentum equation incorporating losses, but this 
     # also needs modifications to gap_function, which assumes isentropic process.
     C4T_actual = C4T
     
+
+
     # calculate actual mass flow rate
+    D.b3 = D.b4 # making the blade height is equal to the rotor inlet blade height
     mdot_actual = V.C3R * V.A3devb3*D.b3 * V.rho3 
     
     # need to solve iteratively for other conditions. 
@@ -371,8 +384,9 @@ def Calculation2(x,M,V,D):
 
     # calcualte velocity
     C4 = np.sqrt(C4R*C4R + C4T*C4T)
+
     # calculate enthalpy at point 4
-    h4 = V.h3t - 1./2. * C4 * C4
+    h4 = V.h3t * D.totalEnergyLossFaction - 1./2. * C4 * C4
 
     # Use equation of state to get pressure and temperature
     if M.gasModel == 'Ideal':       
@@ -436,7 +450,9 @@ def CalcStatorProps(M,V,D):
     temp.append(V.alpha3b) # Add the stator blade angle
     temp.append(V.C3R)     # Add the radial velocity
     temp.append(V.C3T)     # Add the tangential velocity
-
+    temp.append(V.p3)      # Add the pressure
+    temp.append(V.T3)      # Add the temperature
+    temp.append(V.rho3)    # Add the density
     return temp
 
 def writeOutput(V,D):
@@ -454,7 +470,7 @@ def writeOutput(V,D):
     f.write('# ttmin = ' + str(D.ttmin) + '\n')
     f.write('# ttmax = ' + str(D.ttmax) + '\n')
     f.write('# ttstep = ' + str(D.ttstep) + '\n')
-    f.write('#  [r3]   [Z3]  [tt]     [M3]         [A3devb3]       [C3]        [alpha3]       [alpha3b]         [C3R]         [C3T] \n')
+    f.write('#  [r3]   [Z3]  [tt]     [M3]         [A3devb3]       [C3]        [alpha3]       [alpha3b]         [C3R]         [C3T]        [p3]       [T3]       [rho3]\n')
     
     for i in range(len(V.Properties)):
         for j in range(len(V.Properties[i])):
