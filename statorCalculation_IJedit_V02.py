@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # This Python file uses the following encoding: utf-8
-
+# version 3: make the Nelder-Mead method available 2020-04-25 23:14
 
 
 import os         as         os
@@ -120,11 +120,8 @@ def initSimplex(x):
     simplex.append(x)
     for i in range(len(x)):
         temp = x[:]
-        temp[i] = temp[i] + 0.1*temp[i]
+        temp[i] = temp[i] + 0.01*temp[i]
         simplex.append(temp)
-    print(simplex)
-    print(np.array(simplex))
-
     return np.array(simplex)
 
 
@@ -352,12 +349,12 @@ def Calculation3(x,M,V,D):
     V.M3 = x[1]
     V.p3 = x[2]*1.e6
     #print("COME here and alpha3b={0}, M3 = {1}, p3 ={2}".format(x[0],x[1],x[2]))
-
+    #print "I come to here, in Calculation3"
     if V.p3 < 0:
-        print("WARNING!!!!!!,V.p3<0",1/0),
-        print("V.p3=",V.p3)
+        print("WARNING!!!!!!,V.p3<0"),
+        print("V.p3=",V.p3),1/0
         V.p3 = D.p4
-            
+           
     # get geometry constraints, Z and tt
     tt = V.tt
     Z3 = V.Z3
@@ -383,7 +380,7 @@ def Calculation3(x,M,V,D):
         V.h3  = D.Cp * V.T3
         V.a3  = np.sqrt(D.gamma * D.R * V.T3)
         V.p03 = V.p3 *   pow(  ( 1. + D.gammaMinusOne/2. * V.M3**2) , (D.gamma/ D.gammaMinusOne) )
-        print("V.p03=",V.p03,"D.p04=",D.p04)
+        #print("V.p03=",V.p03,"D.p04=",D.p04)
         
 
         V.S3  = D.Cp * np.log(V.T3/D.Tref) - D.R * np.log(V.p3/D.Pref)
@@ -418,8 +415,9 @@ def Calculation3(x,M,V,D):
     #if V.alpha3b > 90:
     #    print('WARNING: alpha3b is larger than 90 degree! The value is: {}'.format(V.alpha3b))
     V.A3devb3 = 2.* np.pi * r3 - Z3 * 0.5* tt * ( 1. + 1./np.cos( np.radians(V.alpha3b) ) )
+    #print("!!!",V.A3devb3, V.alpha3b)
 
-    #print(1./np.cos( np.radians(V.alpha3b))), 1/0
+    #print(2.* np.pi * r3,Z3 * 0.5* tt, 1./np.cos( np.radians(V.alpha3b))), 1/0
 
     #if V.A3devb3 < 0:
     #    print('WARNING! Negative A3devb3 value.')
@@ -470,7 +468,7 @@ def Calculation3(x,M,V,D):
     initial = D.C4R
     maxiter = M.maxiter 
     fun = lambda C4R: ( gap_function_withloss(C4R,C4T,M,V,D)-mdot_actual)
-    sol = sci.optimize.root(fun, initial, method='hybr',options={'xtol':1.e-8, 'maxfev':maxiter})
+    sol = sci.optimize.root(fun, initial, method='lm',options={'xtol':1.e-8, 'maxfev':maxiter})
     status = sol.status
     C4R = sol.x
     mesg = sol.message
@@ -511,7 +509,9 @@ def Calculation3(x,M,V,D):
         print("C4R_target: {0}; C4R_actual: {1}; delta = {2}".format(C4R_target,C4R_actual,errors[1]))
         #print("T4_target: {0}; T4_actual: {1}; delta = {2}".format(T4_target,T4_actual,errors[2]))
         print("P4_target: {0}; P4_actual: {1}; delta = n/a".format(p4_target/1.e3,p4_actual/1.e3))
-
+    
+    if "Nelder-Mead" == M.optimiser:
+        errors = abs(errors[0]) + abs(errors[1]) +abs(errors[2])
     return errors
 
 def h3_function(h3_guess,p3,M3,M,V,D):
@@ -525,7 +525,7 @@ def h3_function(h3_guess,p3,M3,M,V,D):
 def gap_function_withloss(C4R_guess,C4T,M,V,D):
     # function to caluclate total mass flow at exit of gap for a guessed value of C4R
 
-    C4 = np.sqrt( C4R_guess*C4R_guess + C4T*C4T )
+    C4 = np.sqrt( C4R_guess**2 + C4T**2 )
     h4t = V.h3t
     p4t = V.p03 *D.totalPressureLossFaction
     h4 = h4t - 0.5* C4**2
@@ -535,6 +535,7 @@ def gap_function_withloss(C4R_guess,C4T,M,V,D):
 
         T4 = h4 / D.Cp
         a4 = np.sqrt( D.gamma * D.R * T4)
+
         M4 = C4 / a4 
         # S = Cp * log (T/D.Tref) - R log(P/D.Pref)  # definition of enthalpy
         # With losses, we can only considering the effect of total pressure loss here.
@@ -548,6 +549,9 @@ def gap_function_withloss(C4R_guess,C4T,M,V,D):
         T04 =  CP.PropsSI('T', 'H', h4t, 'P', p4t, D.fluidType)
         S4 =   CP.PropsSI('S', 'T', T04, 'P', p4t, D.fluidType)
         rho4 = CP.PropsSI('D', 'H', h4,  'S', S4, D.fluidType)
+
+    #print(" h4= ",h4,"T4= ",T4, "C4= ", C4, "h4t= ",h4t, "s4 = ",s4, "a4= ",a4)
+
     
     mdot4 = C4R_guess * rho4 * D.A4
     #print("In gap_function_withloss, P4=",P4,"rho4=",rho4,'mdot4=',mdot4,"T4=",T4)
@@ -841,7 +845,7 @@ def main(uoDict):
 
 
                 elif "Nelder-Mead" == M.optimiser:
-                    #TODO: make Nelder-Mead optimiser available
+                    #TODO: make Nelder-Mead optimiser available DONE 2020-04-25
 
                     # Here we use Nelder-Mead method to grab the gas and geometric properties.
 
@@ -849,7 +853,10 @@ def main(uoDict):
                     x0 = [D.alpha4,D.M4,D.p4/1.e6]
 
                     V.initial_simplex = initSimplex(x0)                
-                               
+                            
+                    print("#######################################################")
+                    print("START CALCULATION ...")
+                    print("Simplex is {}".format(V.initial_simplex))
 
                     ############################################################
                     # THE OPTIMISER!
